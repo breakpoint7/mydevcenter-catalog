@@ -80,7 +80,7 @@ function SetupScheduledTasks {
     $Trigger.Enabled = $true
 
     $Action = $Task.Actions.Create(0)
-    $Action.Path = "C:\Program Files\PowerShell\7-preview\pwsh.exe"
+    $Action.Path = "C:\Program Files\PowerShell\7\pwsh.exe"
     $Action.Arguments = "-MTA -Command $($CustomizationScriptsDir)\$($RunAsUserScript)"
 
     $TaskFolder = $ShedService.GetFolder("\")
@@ -136,7 +136,7 @@ function InstallPS7 {
             }
         } -Maximum 5 -Delay 100
         # Need to update the path post install
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\PowerShell\7-preview"
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\PowerShell\7"
         Write-Host "Done Installing PowerShell 7"
     }
     else {
@@ -234,7 +234,7 @@ function InstallWinGet {
         }
 
         Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\PowerShell\7-preview"
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\PowerShell\7"
         Write-Host "WinGet version: $(winget -v)"
     }
 
@@ -355,7 +355,7 @@ else {
 
         $installCommandBlock = {
             $installPackageCommand = "Install-WinGetPackage -Scope $($scopeFlagValue) -Source winget -Id '$($Package)' $($versionFlag) | ConvertTo-Json -Depth 10 | Tee-Object -FilePath '$($tempOutFile)'"
-            $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7-preview\pwsh.exe $($mtaFlag) -Command `"$($installPackageCommand)`""}
+            $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7\pwsh.exe $($mtaFlag) -Command `"$($installPackageCommand)`""}
             if (!($processCreation) -or !($processCreation.ProcessId)) {
                 Write-Error "Failed to install package. Process creation failed."
                 exit 1
@@ -400,7 +400,7 @@ else {
     elseif ($ConfigurationFile) {
         Write-Host "Running installation of configuration file: $($ConfigurationFile)"
         $applyConfigCommand = "Get-WinGetConfiguration -File '$($ConfigurationFile)' | Invoke-WinGetConfiguration -AcceptConfigurationAgreements | Select-Object -ExpandProperty UnitResults | ConvertTo-Json -Depth 10 | Tee-Object -FilePath '$($tempOutFile)'"
-        $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7-preview\pwsh.exe -Command `"$($applyConfigCommand)`""}
+        $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7\pwsh.exe -Command `"$($applyConfigCommand)`""}
         if (!($processCreation) -or !($processCreation.ProcessId)) {
             Write-Error "Failed to run configuration file installation. Process creation failed."
             exit 1
