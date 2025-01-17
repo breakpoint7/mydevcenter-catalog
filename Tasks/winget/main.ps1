@@ -24,6 +24,25 @@ if ($(whoami.exe) -eq "nt authority\system") {
     $PsInstallScope = "AllUsers"
 }
 
+$LogFile = "C:\temp\devboxscripts.log"
+function Write-Log {
+    param (
+        [string]$message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - $message"
+    Add-Content -Path $LogFile -Value $logMessage
+}
+
+# Log the parameters passed to the script
+Write-Log "Script started"
+Write-Log "ConfigurationFile: $ConfigurationFile"
+Write-Log "DownloadUrl: $DownloadUrl"
+Write-Log "InlineConfigurationBase64: $InlineConfigurationBase64"
+Write-Log "Package: $Package"
+Write-Log "Version: $Version"
+Write-Log "RunAsUser: $RunAsUser"
+
 # Set the progress preference to silently continue
 # in order to avoid progress bars in the output
 # as this makes web requests very slow
@@ -31,7 +50,7 @@ if ($(whoami.exe) -eq "nt authority\system") {
 $ProgressPreference = 'SilentlyContinue'
 
 function SetupScheduledTasks {
-    Write-Host "Setting up scheduled tasks"
+    Write-Log "Setting up scheduled tasks"
     if (!(Test-Path -PathType Container $CustomizationScriptsDir)) {
         New-Item -Path $CustomizationScriptsDir -ItemType Directory
     }
@@ -85,7 +104,7 @@ function SetupScheduledTasks {
 
     $TaskFolder = $ShedService.GetFolder("\")
     $TaskFolder.RegisterTaskDefinition("$($RunAsUserTask)", $Task , 6, "Users", $null, 4)
-    Write-Host "Done setting up scheduled tasks"
+    Write-Log "Done setting up scheduled tasks"
 }
 
 function WithRetry {
@@ -109,7 +128,7 @@ function WithRetry {
             return
         } catch {
             $lastException = $_
-            Write-Error $_
+            Write-Log $_
 
             # Sleep for a random amount of time with exponential backoff
             $randomDouble = Get-Random -Minimum 0.0 -Maximum 1.0
@@ -123,7 +142,7 @@ function WithRetry {
 
 function InstallPS7 {
     if (!(Get-Command pwsh -ErrorAction SilentlyContinue)) {
-        Write-Host "Installing PowerShell 7"
+        Write-Log "Installing PowerShell 7"
         $code = Invoke-RestMethod -Uri https://aka.ms/install-powershell.ps1
         $null = New-Item -Path function:Install-PowerShell -Value $code
         WithRetry -ScriptBlock {
@@ -137,24 +156,24 @@ function InstallPS7 {
         } -Maximum 5 -Delay 100
         # Need to update the path post install
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\PowerShell\7"
-        Write-Host "Done Installing PowerShell 7"
+        Write-Log "Done Installing PowerShell 7"
     }
     else {
-        Write-Host "PowerShell 7 is already installed"
+        Write-Log "PowerShell 7 is already installed"
     }
 }
 
 function InstallWinGet {
-    Write-Host "Installing powershell modules in scope: $PsInstallScope"
+    Write-Log "Installing powershell modules in scope: $PsInstallScope"
 
     # ensure NuGet provider is installed
     if (!(Get-PackageProvider | Where-Object { $_.Name -eq "NuGet" -and $_.Version -gt "2.8.5.201" })) {
-        Write-Host "Installing NuGet provider"
+        Write-Log "Installing NuGet provider"
         Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope $PsInstallScope
-        Write-Host "Done Installing NuGet provider"
+        Write-Log "Done Installing NuGet provider"
     }
     else {
-        Write-Host "NuGet provider is already installed"
+        Write-Log "NuGet provider is already installed"
     }
 
     # Set PSGallery installation policy to trusted
@@ -164,35 +183,35 @@ function InstallWinGet {
     # check if the Microsoft.Winget.Client module is installed
     $wingetClientPackage = Get-Module -ListAvailable -Name Microsoft.WinGet.Client | Where-Object { $_.Version -ge "1.9.2411" }
     if (!($wingetClientPackage)) {
-        Write-Host "Installing Microsoft.Winget.Client -RequiredVersion 1.9.25190"
+        Write-Log "Installing Microsoft.Winget.Client -RequiredVersion 1.9.25190"
         Install-Module Microsoft.WinGet.Client -Scope $PsInstallScope -RequiredVersion 1.9.25190
         pwsh.exe -MTA -Command "Install-Module Microsoft.WinGet.Client -Scope $PsInstallScope -RequiredVersion 1.9.25190"
-        Write-Host "Done Installing Microsoft.Winget.Client"
+        Write-Log "Done Installing Microsoft.Winget.Client"
     }
     else {
-        Write-Host "Microsoft.Winget.Client is already installed"
+        Write-Log "Microsoft.Winget.Client is already installed"
     }
 
     # check if the Microsoft.WinGet.Configuration module is installed
     $wingetConfigurationPackage = Get-Module -ListAvailable -Name Microsoft.WinGet.Configuration | Where-Object { $_.Version -ge "1.8.1911" }
     if (!($wingetConfigurationPackage)) {
-        Write-Host "Installing Microsoft.WinGet.Configuration"
+        Write-Log "Installing Microsoft.WinGet.Configuration"
         pwsh.exe -MTA -Command "Install-Module Microsoft.WinGet.Configuration -Scope $PsInstallScope"
-        Write-Host "Done Installing Microsoft.WinGet.Configuration"
+        Write-Log "Done Installing Microsoft.WinGet.Configuration"
     }
     else {
-        Write-Host "Microsoft.WinGet.Configuration is already installed"
+        Write-Log "Microsoft.WinGet.Configuration is already installed"
     }
 
-    Write-Host "Updating WinGet"
+    Write-Log "Updating WinGet"
     try {
-        Write-Host "Attempting to repair WinGet Package Manager"
+        Write-Log "Attempting to repair WinGet Package Manager"
         pwsh.exe -MTA -Command "Repair-WinGetPackageManager -Latest -Force -Verbose"
-        Write-Host "Done Reparing WinGet Package Manager"
+        Write-Log "Done Reparing WinGet Package Manager"
     }
     catch {
-        Write-Host "Failed to repair WinGet Package Manager"
-        Write-Error $_
+        Write-Log "Failed to repair WinGet Package Manager"
+        Write-Log $_
     }
 
     if ($PsInstallScope -eq "CurrentUser") {
@@ -200,7 +219,7 @@ function InstallWinGet {
         if (!($msUiXamlPackage)) {
             # instal Microsoft.UI.Xaml
             try {
-                Write-Host "Installing Microsoft.UI.Xaml"
+                Write-Log "Installing Microsoft.UI.Xaml"
                 $architecture = "x64"
                 if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
                     $architecture = "arm64"
@@ -210,10 +229,10 @@ function InstallWinGet {
                 Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6" -OutFile $MsUiXamlZip
                 Expand-Archive $MsUiXamlZip -DestinationPath $MsUiXaml
                 Add-AppxPackage -Path "$($MsUiXaml)\tools\AppX\$($architecture)\Release\Microsoft.UI.Xaml.2.8.appx" -ForceApplicationShutdown
-                Write-Host "Done Installing Microsoft.UI.Xaml"
+                Write-Log "Done Installing Microsoft.UI.Xaml"
             } catch {
-                Write-Host "Failed to install Microsoft.UI.Xaml"
-                Write-Error $_
+                Write-Log "Failed to install Microsoft.UI.Xaml"
+                Write-Log $_
             }
         }
 
@@ -221,21 +240,21 @@ function InstallWinGet {
         if (!($desktopAppInstallerPackage) -or ($desktopAppInstallerPackage.Version -lt "1.22.0.0")) {
             # install Microsoft.DesktopAppInstaller
             try {
-                Write-Host "Installing Microsoft.DesktopAppInstaller"
+                Write-Log "Installing Microsoft.DesktopAppInstaller"
                 $DesktopAppInstallerAppx = "$env:TEMP\$([System.IO.Path]::GetRandomFileName())-DesktopAppInstaller.appx"
                 Invoke-WebRequest -Uri "https://aka.ms/getwinget" -OutFile $DesktopAppInstallerAppx
                 Add-AppxPackage -Path $DesktopAppInstallerAppx -ForceApplicationShutdown
-                Write-Host "Done Installing Microsoft.DesktopAppInstaller"
+                Write-Log "Done Installing Microsoft.DesktopAppInstaller"
             }
             catch {
-                Write-Host "Failed to install DesktopAppInstaller appx package"
-                Write-Error $_
+                Write-Log "Failed to install DesktopAppInstaller appx package"
+                Write-Log $_
             }
         }
 
         Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\PowerShell\7"
-        Write-Host "WinGet version: $(winget -v)"
+        Write-Log "WinGet version: $(winget -v)"
     }
 
     # Revert PSGallery installation policy to untrusted
@@ -281,60 +300,60 @@ function EnsureConfigurationFileIsSet ($ConfigurationFile) {
 
 # If an inline base64 configuration is specified, we need to write the decoded version to the file
 if ($InlineConfigurationBase64) {
-    Write-Host "Decoding base64 inline configuration and writing to file"
+    Write-Log "Decoding base64 inline configuration and writing to file"
 
     $ConfigurationFile = EnsureConfigurationFileIsSet($ConfigurationFile)
     $InlineConfiguration = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($InlineConfigurationBase64))
     $InlineConfiguration | Out-File -FilePath $ConfigurationFile -Encoding utf8
 
-    Write-Host "Wrote configuration to file: $($ConfigurationFile)"
+    Write-Log "Wrote configuration to file: $($ConfigurationFile)"
 }
 # If a download URL is specified, we need to download the contents and write them to the file
 elseif ($DownloadUrl) {
-    Write-Host "Downloading configuration file from: $($DownloadUrl)"
+    Write-Log "Downloading configuration file from: $($DownloadUrl)"
 
     $ConfigurationFile = EnsureConfigurationFileIsSet($ConfigurationFile)
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $ConfigurationFile
 
-    Write-Host "Downloaded configuration to: $($ConfigurationFile)"
+    Write-Log "Downloaded configuration to: $($ConfigurationFile)"
 }
 
 $versionFlag = ""
 # We're running as user via scheduled task:
 if ($RunAsUser -eq "true") {
-    Write-Host "Running as user via scheduled task"
+    Write-Log "Running as user via scheduled task"
 
     if (!(Test-Path -PathType Leaf "$($CustomizationScriptsDir)\$($LockFile)")) {
         SetupScheduledTasks
     }
 
-    Write-Host "Writing commands to user script"
+    Write-Log "Writing commands to user script"
 
     # We're running in package mode:
     if ($Package) {
         # If there's a version passed, add the version flag for CLI
         if ($Version -ne '') {
-            Write-Host "Specifying version: $($Version)"
+            Write-Log "Specifying version: $($Version)"
             $versionFlag = "--version `"$($Version)`""
         }
-        Write-Host "Appending package install: $($Package)"
+        Write-Log "Appending package install: $($Package)"
         AppendToUserScript "winget install --id `"$($Package)`" $($versionFlag) --accept-source-agreements --accept-package-agreements"
-        AppendToUserScript "Write-Host `"winget exit code: `$LASTEXITCODE`""
+        AppendToUserScript "Write-Log `"winget exit code: `$LASTEXITCODE`""
     }
     # We're running in configuration file mode:
     elseif ($ConfigurationFile) {
-        Write-Host "Appending installation of configuration file: $($ConfigurationFile)"
+        Write-Log "Appending installation of configuration file: $($ConfigurationFile)"
         AppendToUserScript "winget configure --file `"$($ConfigurationFile)`" --accept-configuration-agreements"
-        AppendToUserScript "Write-Host `"winget exit code: `$LASTEXITCODE`""
+        AppendToUserScript "Write-Log `"winget exit code: `$LASTEXITCODE`""
     }
     else {
-        Write-Error "No package or configuration file specified"
+        Write-Log "No package or configuration file specified"
         exit 1
     }
 }
 # We're running in the provisioning context:
 else {
-    Write-Host "Running in the provisioning context"
+    Write-Log "Running in the provisioning context"
     $tempOutFile = [System.IO.Path]::GetTempFileName() + ".out.json"
 
     $mtaFlag = "-MTA"
@@ -346,10 +365,10 @@ else {
 
     # We're running in package mode:
     if ($Package) {
-        Write-Host "Running package install: $($Package)"
+        Write-Log "Running package install: $($Package)"
         # If there's a version passed, add the version flag for PS
         if ($Version -ne '') {
-            Write-Host "Specifying version: $($Version)"
+            Write-Log "Specifying version: $($Version)"
             $versionFlag = "-Version '$($Version)'"
         }
 
@@ -357,7 +376,7 @@ else {
             $installPackageCommand = "Install-WinGetPackage -Scope $($scopeFlagValue) -Source winget -Id '$($Package)' $($versionFlag) | ConvertTo-Json -Depth 10 | Tee-Object -FilePath '$($tempOutFile)'"
             $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7\pwsh.exe $($mtaFlag) -Command `"$($installPackageCommand)`""}
             if (!($processCreation) -or !($processCreation.ProcessId)) {
-                Write-Error "Failed to install package. Process creation failed."
+                Write-Log "Failed to install package. Process creation failed."
                 exit 1
             }
 
@@ -366,14 +385,14 @@ else {
             $process.WaitForExit()
             $installExitCode = $process.ExitCode
             if ($installExitCode -ne 0) {
-                Write-Error "Failed to install package. Exit code: $($installExitCode)."
+                Write-Log "Failed to install package. Exit code: $($installExitCode)."
                 exit 1
             }
 
             # read the output file and write it to the console
             if (Test-Path -Path $tempOutFile) {
                 $unitResults = Get-Content -Path $tempOutFile -Raw | Out-String
-                Write-Host $unitResults
+                Write-Log $unitResults
                 Remove-Item -Path $tempOutFile -Force
                 $unitResultsObject = $unitResults | ConvertFrom-Json
 
@@ -385,12 +404,12 @@ else {
 
                 # If there are any errors in the package installation, we need to exit with a non-zero code
                 if ($unitResultsObject.Status -ne "Ok") {
-                    Write-Error "There were errors installing the package."
+                    Write-Log "There were errors installing the package."
                     exit 1
                 }
             }
             else {
-                Write-Host "Couldn't find output file for package installation, assuming fail."
+                Write-Log "Couldn't find output file for package installation, assuming fail."
                 exit 1
             }
         }
@@ -398,11 +417,11 @@ else {
     }
     # We're running in configuration file mode:
     elseif ($ConfigurationFile) {
-        Write-Host "Running installation of configuration file: $($ConfigurationFile)"
+        Write-Log "Running installation of configuration file: $($ConfigurationFile)"
         $applyConfigCommand = "Get-WinGetConfiguration -File '$($ConfigurationFile)' | Invoke-WinGetConfiguration -AcceptConfigurationAgreements | Select-Object -ExpandProperty UnitResults | ConvertTo-Json -Depth 10 | Tee-Object -FilePath '$($tempOutFile)'"
         $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7\pwsh.exe -Command `"$($applyConfigCommand)`""}
         if (!($processCreation) -or !($processCreation.ProcessId)) {
-            Write-Error "Failed to run configuration file installation. Process creation failed."
+            Write-Log "Failed to run configuration file installation. Process creation failed."
             exit 1
         }
 
@@ -411,30 +430,30 @@ else {
         $process.WaitForExit()
         $installExitCode = $process.ExitCode
         if ($installExitCode -ne 0) {
-            Write-Error "Failed to run configuration file installation. Exit code: $($installExitCode)."
+            Write-Log "Failed to run configuration file installation. Exit code: $($installExitCode)."
             exit 1
         }
 
         # read the output file and write it to the console
         if (Test-Path -Path $tempOutFile) {
             $unitResults = Get-Content -Path $tempOutFile -Raw | Out-String
-            Write-Host $unitResults
+            Write-Log $unitResults
             Remove-Item -Path $tempOutFile -Force
             # If there are any errors in the unit results, we need to exit with a non-zero code
             $unitResultsObject = $unitResults | ConvertFrom-Json
             $errors = $unitResultsObject | Where-Object { $_.ResultCode -ne "0" }
             if ($errors) {
-                Write-Error "There were errors applying the configuration."
+                Write-Log "There were errors applying the configuration."
                 exit 1
             }
         }
         else {
-            Write-Host "Couldn't find output file for configuration application, assuming fail."
+            Write-Log "Couldn't find output file for configuration application, assuming fail."
             exit 1
         }
     }
     else {
-        Write-Error "No package or configuration file specified"
+        Write-Log "No package or configuration file specified"
         exit 1
     }
 }
