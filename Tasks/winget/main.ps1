@@ -375,6 +375,7 @@ else {
         $installCommandBlock = {
             $installPackageCommand = "Install-WinGetPackage -Scope $($scopeFlagValue) -Source winget -Id '$($Package)' $($versionFlag) | ConvertTo-Json -Depth 10 | Tee-Object -FilePath '$($tempOutFile)'"
             Write-Log $installPackageCommand
+            Write-Log $mtaFlag
             $processCreation = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine="C:\Program Files\PowerShell\7\pwsh.exe $($mtaFlag) -Command `"$($installPackageCommand)`""}
             if (!($processCreation) -or !($processCreation.ProcessId)) {
                 Write-Log "Failed to install package. Process creation failed."
