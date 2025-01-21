@@ -25,10 +25,15 @@ if ($(whoami.exe) -eq "nt authority\system") {
 }
 
 $LogFile = "C:\temp\devboxscripts.log"
+$LogDir = [System.IO.Path]::GetDirectoryName($LogFile)
+
 function Write-Log {
     param (
         [string]$message
     )
+    if (-not (Test-Path -Path $LogDir)) {
+        New-Item -Path $LogDir -ItemType Directory -Force
+    }
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logMessage = "$timestamp - $message"
     Add-Content -Path $LogFile -Value $logMessage
